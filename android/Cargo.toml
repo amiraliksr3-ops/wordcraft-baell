@@ -6,15 +6,22 @@ license.workspace = true
 publish = false
 description = "WordCraft for Android (the Baell port): the NativeActivity host that runs the desktop front end"
 
-[lints]
-workspace = true
-
-[lints.rust]
-# Exception to the workspace's `unsafe_code = "forbid"` (AGENTS.md names it here): the
+# This crate cannot use `[lints] workspace = true`: Cargo rejects a workspace inheritance that
+# also overrides one lint. The lists below repeat the workspace's lints (root Cargo.toml) with
+# the one documented exception AGENTS.md names: `unsafe_code = "allow"`, because the
 # NativeActivity ABI loads the shared library and calls the exported `android_main` symbol,
 # which needs `#[unsafe(no_mangle)]` on it. That attribute is this crate's only unsafe use;
 # src/lib.rs carries the same note.
+[lints.rust]
 unsafe_code = "allow"
+
+[lints.clippy]
+cognitive_complexity = "deny"
+wildcard_imports = "deny"
+dbg_macro = "warn"
+todo = "warn"
+too_many_arguments = "deny"
+type_complexity = "allow"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
