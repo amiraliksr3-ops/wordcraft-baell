@@ -60,6 +60,15 @@ jobs:
           "$sdkmanager" --install "ndk;${NDK_VERSION}"
           echo "ANDROID_NDK_ROOT=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          # Build scripts that compile C (ring, android-activity) look up the target clang
+          # wrapper by name (`aarch64-linux-android-clang`) on PATH. The NDK is not on PATH by
+          # default, so a `cargo check` fails in cc-rs with "tool not found".
+          ndk_bin="$sdk/ndk/${NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          if [ ! -d "$ndk_bin" ]; then
+            echo "::error::NDK clang toolchain not found at $ndk_bin"
+            exit 1
+          fi
+          echo "$ndk_bin" >> "$GITHUB_PATH"
 
       - name: Install Rust (stable) with the Android target
         uses: dtolnay/rust-toolchain@stable
@@ -123,6 +132,15 @@ jobs:
           "$sdkmanager" --install "ndk;${NDK_VERSION}"
           echo "ANDROID_NDK_ROOT=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          # Build scripts that compile C (ring, android-activity) look up the target clang
+          # wrapper by name (`aarch64-linux-android-clang`) on PATH. The NDK is not on PATH by
+          # default, so a `cargo check` fails in cc-rs with "tool not found".
+          ndk_bin="$sdk/ndk/${NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          if [ ! -d "$ndk_bin" ]; then
+            echo "::error::NDK clang toolchain not found at $ndk_bin"
+            exit 1
+          fi
+          echo "$ndk_bin" >> "$GITHUB_PATH"
 
       - name: Install Rust (stable) with the Android targets
         uses: dtolnay/rust-toolchain@stable
@@ -230,6 +248,15 @@ jobs:
           "$sdkmanager" --install "ndk;${NDK_VERSION}"
           echo "ANDROID_NDK_ROOT=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          # Build scripts that compile C (ring, android-activity) look up the target clang
+          # wrapper by name (`aarch64-linux-android-clang`) on PATH. The NDK is not on PATH by
+          # default, so a `cargo check` fails in cc-rs with "tool not found".
+          ndk_bin="$sdk/ndk/${NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          if [ ! -d "$ndk_bin" ]; then
+            echo "::error::NDK clang toolchain not found at $ndk_bin"
+            exit 1
+          fi
+          echo "$ndk_bin" >> "$GITHUB_PATH"
 
       - name: Install Rust (stable) with the Android targets
         uses: dtolnay/rust-toolchain@stable
