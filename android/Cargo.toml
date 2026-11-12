@@ -1,0 +1,37 @@
+[package]
+name = "wordcraft-android"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "WordCraft for Android (the Baell port): the NativeActivity host that runs the desktop front end"
+
+[lints]
+workspace = true
+
+[lints.rust]
+# Exception to the workspace's `unsafe_code = "forbid"` (AGENTS.md names it here): the
+# NativeActivity ABI loads the shared library and calls the exported `android_main` symbol,
+# which needs `#[unsafe(no_mangle)]` on it. That attribute is this crate's only unsafe use;
+# src/lib.rs carries the same note.
+unsafe_code = "allow"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wordcraft-engine = { workspace = true }
+wordcraft-fonts = { workspace = true }
+wordcraft-proof = { workspace = true }
+wordcraft-ui-egui = { workspace = true }
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "clipboard", "links", "android-native-activity"] }
+egui = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+# The event loop for Android (`EventLoopBuilderExtAndroid::with_android_app`). Same crate
+# instance eframe builds on: the workspace patch pins winit to storytold/winit, whose
+# android-activity 0.6 is the glue this crate's `android_main` must match.
+winit = { version = "0.30", default-features = false, features = ["android-native-activity"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.15"

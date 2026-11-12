@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The round launcher icon for API levels below 26: the same artwork clipped to a circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#0F1419"
+        android:pathData="M54,0a54,54 0 1,0 0,108a54,54 0 1,0 0,-108z" />
+    <path
+        android:fillColor="#6C8EBF"
+        android:pathData="M24,24h60v60h-60z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,32l34,0l0,44l-34,0z" />
+    <path
+        android:fillColor="#B9C2CC"
+        android:pathData="M32,40l34,0l0,2l-34,0z" />
+    <path
+        android:fillColor="#B9C2CC"
+        android:pathData="M36,48l26,0l0,2l-26,0z" />
+    <path
+        android:fillColor="#B9C2CC"
+        android:pathData="M36,54l26,0l0,2l-26,0z" />
+    <path
+        android:fillColor="#B9C2CC"
+        android:pathData="M36,60l20,0l0,2l-20,0z" />
+    <path
+        android:fillColor="#4A6A95"
+        android:pathData="M68,34l4,-4l8,8l-4,4z" />
+    <path
+        android:fillColor="#4A6A95"
+        android:pathData="M66,38l6,6l-2,2l-6,-6z" />
+</vector>

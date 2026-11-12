@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WordCraft (Baell) is a NativeActivity: the system loads libwordcraft_android.so and runs the
+     Rust app (see android/Cargo.toml and android/src/host.rs). There is no Java or Kotlin code
+     (android:hasCode="false"), so the manifest stays this small. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Shared storage on old devices only (up to Android 12L): lets the app's built-in file
+         browser open documents the user keeps there. From Android 10 on, the app reads and
+         writes its own app folders without any permission. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <application
+        android:allowBackup="true"
+        android:hasCode="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Baell">
+
+        <activity
+            android:name="android.app.NativeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:screenOrientation="fullUser"
+            android:stateNotNeeded="true"
+            android:theme="@style/Theme.Baell"
+            android:windowSoftInputMode="adjustResize">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- The shared library NativeActivity loads and calls `android_main` in
+                 (android/src/host.rs). -->
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="wordcraft_android" />
+        </activity>
+    </application>
+</manifest>
