@@ -1,0 +1,260 @@
+# WordCraft (Baell) — Android CI.
+#
+# Builds the Android port on GitHub's servers; no local toolchain needed.
+#
+# - Every push: check the Android crate (cargo check/clippy for an Android target, no linking)
+#   and build debug APKs, uploaded as workflow artifacts.
+# - A tag matching `v*-android*` (say `v0.18.1-android.1`) additionally builds signed release
+#   APKs and an AAB for all ABIs and publishes them on a GitHub release.
+#
+# Local equivalent: docs/BUILD.md. Signing: set the optional repository secrets
+# ANDROID_KEYSTORE_B64 (base64 of a .jks/.keystore), ANDROID_KEYSTORE_PASSWORD,
+# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD; without them a temporary key is generated, so a
+# release APK installs but is not a stable signing identity.
+
+name: Android (Baell)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*-android*']
+    paths-ignore: ['**.md', 'docs/**']
+  pull_request:
+    branches: [main, master]
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: 27.0.12077973
+
+jobs:
+  # The Android crate, compiled for an Android target without linking. The NDK is still set
+  # up: `android-activity`'s build script compiles its C glue for the target, which needs the
+  # NDK's clang even for `cargo check`.
+  check-android:
+    name: Check Android target
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up the Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install the NDK
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Install Rust (stable) with the Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: aarch64-linux-android
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: baell-android-check
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Check (aarch64-linux-android)
+        run: cargo check -p wordcraft-android --target aarch64-linux-android
+
+      - name: Clippy (aarch64-linux-android)
+        run: cargo clippy -p wordcraft-android --target aarch64-linux-android -- -D warnings
+
+  # Build the native library for all ABIs and package it. With ABI splits one Gradle run
+  # yields an APK per ABI plus a universal one, so there is no build matrix.
+  build:
+    name: Build debug APKs
+    needs: check-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Set up the Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install the NDK
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Install Rust (stable) with the Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 4.1.2
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: baell-android-build
+
+      # Run cargo from the workspace root, where [patch.crates-io] pins egui, eframe and winit
+      # to the WordCraft forks. cargo-ndk writes each ABI's library straight into the folder
+      # Gradle packages.
+      - name: Build libwordcraft_android.so for all ABIs
+        run: >
+          cargo ndk
+          -t arm64-v8a
+          -t armeabi-v7a
+          -t x86_64
+          -o android/app/src/main/jniLibs
+          -- build --release -p wordcraft-android
+
+      - name: Build debug APKs
+        working-directory: android
+        run: gradle :app:assembleDebug --console=plain
+
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: baell-wordcraft-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+  # Release: on a `v*-android*` tag, build signed release APKs and an AAB and publish them.
+  release:
+    name: Release APKs and AAB
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref, 'android')
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Set up the Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install the NDK
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Install Rust (stable) with the Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 4.1.2
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: baell-android-release
+
+      - name: Build libwordcraft_android.so for all ABIs
+        run: >
+          cargo ndk
+          -t arm64-v8a
+          -t armeabi-v7a
+          -t x86_64
+          -o android/app/src/main/jniLibs
+          -- build --release -p wordcraft-android
+
+      # The caller's keystore when the secrets are set, else a temporary key so the APK
+      # installs. The key never leaves the runner (secrets and temporary files only).
+      - name: Prepare the signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/baell.keystore"
+            echo "SIGNING_STORE=$RUNNER_TEMP/baell.keystore" >> "$GITHUB_ENV"
+            echo "SIGNING_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -v \
+              -keystore "$RUNNER_TEMP/baell.keystore" \
+              -storepass baell-temporary -keypass baell-temporary \
+              -alias baell-release -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=WordCraft (Baell), O=Baell"
+            echo "SIGNING_STORE=$RUNNER_TEMP/baell.keystore" >> "$GITHUB_ENV"
+            echo "SIGNING_STORE_PASSWORD=baell-temporary" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_ALIAS=baell-release" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_PASSWORD=baell-temporary" >> "$GITHUB_ENV"
+            echo "::warning::No ANDROID_KEYSTORE_B64 secret: the release is signed with a temporary key. Reuse the secrets for a stable update identity."
+          fi
+
+      - name: Build signed release APKs and AAB
+        working-directory: android
+        run: >
+          gradle :app:assembleRelease :app:bundleRelease --console=plain
+          -Pandroid.injected.signing.store.file=$SIGNING_STORE
+          -Pandroid.injected.signing.store.password=$SIGNING_STORE_PASSWORD
+          -Pandroid.injected.signing.key.alias=$SIGNING_KEY_ALIAS
+          -Pandroid.injected.signing.key.password=$SIGNING_KEY_PASSWORD
+
+      - name: Collect and checksum the outputs
+        run: |
+          mkdir -p release
+          for f in android/app/build/outputs/apk/release/*.apk; do
+            abi=$(basename "$f" | sed -E 's/^app-(.*)-release\.apk$/\1/')
+            cp "$f" "release/WordCraft-Baell-${GITHUB_REF_NAME}-${abi}.apk"
+          done
+          cp android/app/build/outputs/bundle/release/app-release.aab \
+            "release/WordCraft-Baell-${GITHUB_REF_NAME}.aab"
+          sha256sum release/* > release/SHA256SUMS.txt
+          cat release/SHA256SUMS.txt
+
+      - name: Publish the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WordCraft (Baell) ${{ github.ref_name }} for Android
+          body: |
+            Android build of [WordCraft](https://github.com/storytold/wordcraft), the open-source Rust word processor — the Baell port.
+
+            - `WordCraft-Baell-${{ github.ref_name }}-arm64-v8a.apk` — modern phones (install this one)
+            - `WordCraft-Baell-${{ github.ref_name }}-armeabi-v7a.apk` — older 32-bit phones
+            - `WordCraft-Baell-${{ github.ref_name }}-universal.apk` — every ABI in one file
+            - `WordCraft-Baell-${{ github.ref_name }}.aab` — for Play Store upload or `bundletool`
+            - `SHA256SUMS.txt` — checksums of all files
+
+            Install with `adb install <apk>` or by opening the APK on the phone. Package: `ai.baell.word`.
+          files: |
+            release/WordCraft-Baell-${{ github.ref_name }}-*.apk
+            release/WordCraft-Baell-${{ github.ref_name }}.aab
+            release/SHA256SUMS.txt
+          fail_on_unmatched_files: true
+          generate_release_notes: true

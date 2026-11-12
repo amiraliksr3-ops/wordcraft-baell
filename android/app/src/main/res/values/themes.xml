@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The framework's dark Material theme: it matches WordCraft's dark UI and needs no
+     support-library dependency, because the activity is a NativeActivity with no Java code. -->
+<resources>
+    <style name="Theme.Baell" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0F1419</item>
+        <item name="android:navigationBarColor">#0F1419</item>
+        <item name="android:windowBackground">#0F1419</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

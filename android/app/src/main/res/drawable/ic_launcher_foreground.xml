@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Baell Word app icon: a stylized document page with a pen, on a blue tile. -->
+    <group
+        android:translateX="24"
+        android:translateY="24">
+        <!-- Blue tile background -->
+        <path
+            android:fillColor="#6C8EBF"
+            android:pathData="M0,0h60v60h-60z" />
+        <!-- Document page -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M8,8l34,0l0,44l-34,0z" />
+        <path
+            android:fillColor="#B9C2CC"
+            android:pathData="M8,16l34,0l0,2l-34,0z" />
+        <path
+            android:fillColor="#B9C2CC"
+            android:pathData="M12,24l26,0l0,2l-26,0z" />
+        <path
+            android:fillColor="#B9C2CC"
+            android:pathData="M12,30l26,0l0,2l-26,0z" />
+        <path
+            android:fillColor="#B9C2CC"
+            android:pathData="M12,36l20,0l0,2l-20,0z" />
+        <!-- Pen -->
+        <path
+            android:fillColor="#4A6A95"
+            android:pathData="M44,10l4,-4l8,8l-4,4z" />
+        <path
+            android:fillColor="#4A6A95"
+            android:pathData="M42,14l6,6l-2,2l-6,-6z" />
+    </group>
+</vector>

@@ -1,0 +1,49 @@
+// WordCraft (Baell) — the Android host.
+//
+// The activity is a plain `android.app.NativeActivity`: it loads `libwordcraft_android.so`,
+// which the Rust workspace builds with cargo-ndk (see docs/BUILD.md and
+// .github/workflows/ci-android.yml), and there is no Java or Kotlin code. Gradle only packages
+// the libraries from `src/main/jniLibs/<abi>/`; it never calls the Rust toolchain itself.
+plugins {
+    id 'com.android.application' version '8.5.2'
+}
+
+android {
+    namespace 'ai.baell.word'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ai.baell.word'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '0.18.1' // the upstream WordCraft version this port tracks
+    }
+
+    // One APK per ABI plus a universal one, so a phone downloads only its own libraries.
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+            universalApk true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        // The host shell has no lint-worthy code (there is none); don't fail the build on it.
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
