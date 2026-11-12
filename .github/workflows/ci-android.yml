@@ -39,14 +39,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ubuntu-latest already ships the Android SDK with its licences accepted. Do not use
+      # android-actions/setup-android@v3 here: it still installs the removed `tools` package and
+      # fails before the build starts. Only the NDK has to be installed.
       - name: Set up the Android SDK and NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install the NDK
         run: |
-          sdkmanager --install "ndk;${NDK_VERSION}"
-          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          sdkmanager="$(command -v sdkmanager || true)"
+          if [ -z "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n1)"
+          fi
+          if [ -z "$sdkmanager" ]; then
+            echo "::error::sdkmanager not found under $sdk"
+            exit 1
+          fi
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" --install "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
       - name: Install Rust (stable) with the Android target
         uses: dtolnay/rust-toolchain@stable
@@ -89,14 +102,27 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      # ubuntu-latest already ships the Android SDK with its licences accepted. Do not use
+      # android-actions/setup-android@v3 here: it still installs the removed `tools` package and
+      # fails before the build starts. Only the NDK has to be installed.
       - name: Set up the Android SDK and NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install the NDK
         run: |
-          sdkmanager --install "ndk;${NDK_VERSION}"
-          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          sdkmanager="$(command -v sdkmanager || true)"
+          if [ -z "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n1)"
+          fi
+          if [ -z "$sdkmanager" ]; then
+            echo "::error::sdkmanager not found under $sdk"
+            exit 1
+          fi
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" --install "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
       - name: Install Rust (stable) with the Android targets
         uses: dtolnay/rust-toolchain@stable
@@ -183,14 +209,27 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      # ubuntu-latest already ships the Android SDK with its licences accepted. Do not use
+      # android-actions/setup-android@v3 here: it still installs the removed `tools` package and
+      # fails before the build starts. Only the NDK has to be installed.
       - name: Set up the Android SDK and NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install the NDK
         run: |
-          sdkmanager --install "ndk;${NDK_VERSION}"
-          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          sdkmanager="$(command -v sdkmanager || true)"
+          if [ -z "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n1)"
+          fi
+          if [ -z "$sdkmanager" ]; then
+            echo "::error::sdkmanager not found under $sdk"
+            exit 1
+          fi
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" --install "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
       - name: Install Rust (stable) with the Android targets
         uses: dtolnay/rust-toolchain@stable
