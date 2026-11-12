@@ -58,9 +58,16 @@ pub fn run(app: winit::platform::android::activity::AndroidApp) {
     // recovery, fonts, the custom dictionary). Without it the app still runs; it just keeps
     // nothing between sessions.
     let data_dir = app.internal_data_path().or_else(|| app.external_data_path());
+    // Downloads are user files, so they go to the external app folder (Android/data/<package>/
+    // files) where a file manager can reach them. If external storage is unavailable, fall back
+    // to the internal directory so an export still succeeds.
+    let downloads_dir = app.external_data_path().or_else(|| data_dir.clone());
     match data_dir.as_deref() {
         Some(dir) => log::info!("data directory: {}", dir.display()),
         None => log::warn!("no data directory from the activity; preferences and recovery are off"),
+    }
+    if let Some(dir) = downloads_dir.as_deref() {
+        log::info!("downloads directory: {}", dir.display());
     }
 
     let event_loop = match winit::event_loop::EventLoop::<eframe::UserEvent>::with_user_event().with_android_app(app).build() {
@@ -77,7 +84,7 @@ pub fn run(app: winit::platform::android::activity::AndroidApp) {
     let mut winit_app = eframe::create_native(
         "WordCraft",
         options,
-        Box::new(move |cc| creator(cc, data_dir.as_deref())),
+        Box::new(move |cc| creator(cc, data_dir.as_deref(), downloads_dir.as_deref())),
         &event_loop,
     );
     if let Err(e) = event_loop.run_app(&mut winit_app) {
@@ -87,19 +94,23 @@ pub fn run(app: winit::platform::android::activity::AndroidApp) {
 
 /// The eframe app creator: builds the session and the front end, the desktop app's startup
 /// minus the desktop-only steps (`apps/wordcraft/src/main.rs`, `run_native`'s closure).
-fn creator(cc: &eframe::CreationContext<'_>, data_dir: Option<&Path>) -> Result<Box<dyn eframe::App>, Box<dyn core::error::Error + Send + Sync>> {
-    let app = build(cc, data_dir).map_err(Box::<dyn core::error::Error + Send + Sync>::from)?;
+fn creator(
+    cc: &eframe::CreationContext<'_>,
+    data_dir: Option<&Path>,
+    downloads_dir: Option<&Path>,
+) -> Result<Box<dyn eframe::App>, Box<dyn core::error::Error + Send + Sync>> {
+    let app = build(cc, data_dir, downloads_dir).map_err(Box::<dyn core::error::Error + Send + Sync>::from)?;
     Ok(Box::new(BaellApp(app, data_dir.map(Path::to_path_buf))))
 }
 
 /// The system region picks the new document's paper, the units and the decimal separator (#838),
 /// the same way the desktop and web apps do. Then preferences, the user dictionary, font packs,
 /// recovery, in the desktop app's order.
-fn build(cc: &eframe::CreationContext<'_>, data_dir: Option<&Path>) -> Result<WordApp, String> {
+fn build(cc: &eframe::CreationContext<'_>, data_dir: Option<&Path>, downloads_dir: Option<&Path>) -> Result<WordApp, String> {
     let region = wordcraft_ui_egui::i18n::system_region();
     let mut session = Session::new(wordcraft_engine::blank_document(&region));
     session.system_region = region;
-    let mut app = WordApp::new(session, services(data_dir));
+    let mut app = WordApp::new(session, services(data_dir, downloads_dir));
     load_prefs(&mut app, data_dir);
     load_user_dictionary(&mut app, data_dir);
     // Language packs from the suite's font store; an Install click is the person's own.
@@ -128,9 +139,9 @@ fn builtin_file_dialog(req: FileDialogRequest) -> mpsc::Receiver<FileDialogAnswe
     rx
 }
 
-/// Writes a download next to the app's data (see [`DOWNLOADS`]); the file name is the last path
-/// segment only, so a hostile name cannot escape the folder. The folder is created on first
-/// use: a fresh install has no `Downloads` directory yet.
+/// Writes a download into the app's external `Downloads` folder (see [`DOWNLOADS`]); the file
+/// name is the last path segment only, so a hostile name cannot escape the folder. The folder is
+/// created on first use: a fresh install has no `Downloads` directory yet.
 fn download_service(dir: PathBuf) -> impl Fn(&str, &[u8]) -> Result<(), String> {
     move |name, bytes| {
         let Some(name) = last_segment(name) else { return Err("download: no file name".into()) };
@@ -153,10 +164,10 @@ fn last_segment(path: &str) -> Option<&str> {
 
 /// The host services a phone can offer: the built-in file browser for dialogs, downloads into
 /// the app's own folder, personal templates and pictures the user inserted before.
-fn services(data_dir: Option<&Path>) -> Services {
+fn services(data_dir: Option<&Path>, downloads_dir: Option<&Path>) -> Services {
     Services {
         file_dialog: Some(Box::new(builtin_file_dialog)),
-        download: data_dir.map(|dir| Box::new(download_service(dir.join(DOWNLOADS))) as Box<dyn Fn(&str, &[u8]) -> Result<(), String>>),
+        download: downloads_dir.map(|dir| Box::new(download_service(dir.join(DOWNLOADS))) as Box<dyn Fn(&str, &[u8]) -> Result<(), String>>),
         templates_dir: data_dir.map(|dir| dir.join("Templates")),
         ..Services::default()
     }
