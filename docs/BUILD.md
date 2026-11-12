@@ -52,19 +52,38 @@ There is no committed Gradle wrapper; install Gradle 8.10.2 (or run `gradle wrap
 - On a tag matching `v*-android*` (say `v0.18.1-android.1`): the same in release mode, signed
   APKs (one per ABI plus a universal one) and an AAB, published on a GitHub release.
 
-### Release signing (optional)
+### Release signing (required for releases)
 
-By default the release APKs are signed with a key generated on the runner — fine for testing
-installs, but not a stable identity for updates. For a stable one, add these repository
-secrets (`Settings ▸ Secrets and variables ▸ Actions`):
+Every APK and the AAB is signed with one stable key, so Android installs a new release over the
+previous one. The `release` job refuses to publish without the key rather than shipping a
+throwaway signature that would force an uninstall for every update.
 
-- `ANDROID_KEYSTORE_B64` — a base64 encoding of your `.jks`/`.keystore` file
-  (`base64 -w0 keystore.jks`)
+Create the key once, outside the repository:
+
+```powershell
+pwsh packaging/android/generate-signing-key.ps1
+```
+
+It writes `baell-release.keystore` and `baell-release.secrets.txt` (the four values below) under
+`~/.wordcraft/android/`. Back both up: the keystore cannot be recovered. Then add each value under
+`Settings ▸ Secrets and variables ▸ Actions`:
+
+- `ANDROID_KEYSTORE_B64` — the base64 encoding of the `.jks`/`.keystore` file
 - `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_ALIAS` — `baell-release` by default
 - `ANDROID_KEY_PASSWORD`
 
-Keep the keystore file itself out of the repository.
+Never commit the keystore or the secrets file. To use an existing key instead, encode it yourself
+(`[Convert]::ToBase64String([IO.File]::ReadAllBytes('key.keystore'))`) and add the same four
+secrets.
+
+### Release version
+
+The tag is the one source of truth: `v0.18.1-android.1` becomes versionName `0.18.1-android.1`
+and versionCode `180101`. versionCode must strictly increase, so use a higher build number
+(`v0.18.1-android.2`) for a follow-up release that does not change the upstream version.
+`android/app/build.gradle` keeps fallback values for local builds; the workflow overrides them
+through `BAELL_VERSION_NAME` and `BAELL_VERSION_CODE`.
 
 ## Local builds
 

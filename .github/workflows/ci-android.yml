@@ -7,10 +7,10 @@
 # - A tag matching `v*-android*` (say `v0.18.1-android.1`) additionally builds signed release
 #   APKs and an AAB for all ABIs and publishes them on a GitHub release.
 #
-# Local equivalent: docs/BUILD.md. Signing: set the optional repository secrets
+# Local equivalent: docs/BUILD.md. Signing: the release job requires the repository secrets
 # ANDROID_KEYSTORE_B64 (base64 of a .jks/.keystore), ANDROID_KEYSTORE_PASSWORD,
-# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD; without them a temporary key is generated, so a
-# release APK installs but is not a stable signing identity.
+# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD, and refuses to publish a build signed with a
+# throwaway key. Generate them once with packaging/android/generate-signing-key.ps1.
 
 name: Android (Baell)
 
@@ -146,6 +146,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The tag is the one source of truth for the release identity. versionCode must strictly
+      # increase for every release: Android refuses to install an update whose versionCode is not
+      # higher than the installed one. The build number (the `.1` in v0.18.1-android.1) is part
+      # of the code, so v0.18.1-android.2 is still an update over v0.18.1-android.1.
+      - name: Derive the version from the tag
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME}"
+          if [[ ! "$ref" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)-android(\.([0-9]+))?$ ]]; then
+            echo "::error::Tag '$ref' must look like v<major>.<minor>.<patch>-android[.<build>] (for example v0.18.1-android.1)."
+            exit 1
+          fi
+          major=$((10#${BASH_REMATCH[1]}))
+          minor=$((10#${BASH_REMATCH[2]}))
+          patch=$((10#${BASH_REMATCH[3]}))
+          build=$((10#${BASH_REMATCH[5]:-1}))
+          if (( minor > 99 || patch > 99 || build > 99 )); then
+            echo "::error::versionCode needs minor, patch and build below 100 (got $minor.$patch.$build)."
+            exit 1
+          fi
+          version_name="${ref#v}"
+          version_code=$(( major * 1000000 + minor * 10000 + patch * 100 + build ))
+          echo "BAELL_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+          echo "BAELL_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
+          echo "Release $version_name (versionCode $version_code)"
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -188,8 +214,10 @@ jobs:
           -o android/app/src/main/jniLibs
           -- build --release -p wordcraft-android
 
-      # The caller's keystore when the secrets are set, else a temporary key so the APK
-      # installs. The key never leaves the runner (secrets and temporary files only).
+      # A real release carries a stable signing identity: the same key every time, so Android
+      # installs the next version over the previous one. A throwaway key generated on the runner
+      # would make every update require an uninstall, so this job refuses to publish without the
+      # secrets (docs/BUILD.md). The key never leaves the runner (secrets and temporary files only).
       - name: Prepare the signing key
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
@@ -197,25 +225,21 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          set -e
-          if [ -n "$KEYSTORE_B64" ]; then
-            printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/baell.keystore"
-            echo "SIGNING_STORE=$RUNNER_TEMP/baell.keystore" >> "$GITHUB_ENV"
-            echo "SIGNING_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-            echo "SIGNING_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
-            echo "SIGNING_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
-          else
-            keytool -genkeypair -v \
-              -keystore "$RUNNER_TEMP/baell.keystore" \
-              -storepass baell-temporary -keypass baell-temporary \
-              -alias baell-release -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=WordCraft (Baell), O=Baell"
-            echo "SIGNING_STORE=$RUNNER_TEMP/baell.keystore" >> "$GITHUB_ENV"
-            echo "SIGNING_STORE_PASSWORD=baell-temporary" >> "$GITHUB_ENV"
-            echo "SIGNING_KEY_ALIAS=baell-release" >> "$GITHUB_ENV"
-            echo "SIGNING_KEY_PASSWORD=baell-temporary" >> "$GITHUB_ENV"
-            echo "::warning::No ANDROID_KEYSTORE_B64 secret: the release is signed with a temporary key. Reuse the secrets for a stable update identity."
+          set -euo pipefail
+          missing=()
+          [ -n "$KEYSTORE_B64" ] || missing+=("ANDROID_KEYSTORE_B64")
+          [ -n "$KEYSTORE_PASSWORD" ] || missing+=("ANDROID_KEYSTORE_PASSWORD")
+          [ -n "$KEY_ALIAS" ] || missing+=("ANDROID_KEY_ALIAS")
+          [ -n "$KEY_PASSWORD" ] || missing+=("ANDROID_KEY_PASSWORD")
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Release signing secrets are missing: ${missing[*]}. Add all four under Settings > Secrets and variables > Actions (docs/BUILD.md); a release is never published with a throwaway key."
+            exit 1
           fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/baell.keystore"
+          echo "SIGNING_STORE=$RUNNER_TEMP/baell.keystore" >> "$GITHUB_ENV"
+          echo "SIGNING_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "SIGNING_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "SIGNING_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build signed release APKs and AAB
         working-directory: android
@@ -225,6 +249,16 @@ jobs:
           -Pandroid.injected.signing.store.password=$SIGNING_STORE_PASSWORD
           -Pandroid.injected.signing.key.alias=$SIGNING_KEY_ALIAS
           -Pandroid.injected.signing.key.password=$SIGNING_KEY_PASSWORD
+
+      # Prove the artifacts carry the expected signature instead of trusting Gradle's log.
+      - name: Verify the APK signatures
+        run: |
+          set -euo pipefail
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n1)"
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            echo "== $apk"
+            "$apksigner" verify --verbose --print-certs "$apk"
+          done
 
       - name: Collect and checksum the outputs
         run: |

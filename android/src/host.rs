@@ -129,20 +129,26 @@ fn builtin_file_dialog(req: FileDialogRequest) -> mpsc::Receiver<FileDialogAnswe
 }
 
 /// Writes a download next to the app's data (see [`DOWNLOADS`]); the file name is the last path
-/// segment only, so a hostile name cannot escape the folder.
+/// segment only, so a hostile name cannot escape the folder. The folder is created on first
+/// use: a fresh install has no `Downloads` directory yet.
 fn download_service(dir: PathBuf) -> impl Fn(&str, &[u8]) -> Result<(), String> {
     move |name, bytes| {
         let Some(name) = last_segment(name) else { return Err("download: no file name".into()) };
+        std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
         let out = dir.join(name);
         std::fs::write(&out, bytes).map_err(|e| format!("cannot write {}: {e}", out.display()))
     }
 }
 
-/// The file name of a path, or `None` when the path ends in a separator or is empty.
+/// The file name of a path, or `None` when it has no usable file name: an empty path, one that
+/// ends in a separator, or a `.`/`..` component that would leave the download folder.
 fn last_segment(path: &str) -> Option<&str> {
     let trimmed = path.trim_end_matches(['/', '\\']);
     let segment = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed);
-    (!segment.is_empty()).then_some(segment)
+    if segment.is_empty() || segment == "." || segment == ".." || segment.contains('\0') {
+        return None;
+    }
+    Some(segment)
 }
 
 /// The host services a phone can offer: the built-in file browser for dialogs, downloads into
@@ -213,5 +219,35 @@ fn load_user_fonts(data_dir: Option<&Path>) {
     let (loaded, skipped) = wordcraft_fonts::FontDb::global().load_user_fonts(&dir);
     if !loaded.is_empty() || !skipped.is_empty() {
         log::info!("user fonts: {} loaded, {} skipped from {}", loaded.len(), skipped.len(), dir.display());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn last_segment_keeps_a_file_name_and_rejects_escapes() {
+        assert_eq!(last_segment("/data/user/0/ai.baell.word/files/Downloads/report.pdf"), Some("report.pdf"));
+        assert_eq!(last_segment("report.pdf/"), Some("report.pdf"));
+        assert_eq!(last_segment(".."), None);
+        assert_eq!(last_segment("../"), None);
+        assert_eq!(last_segment("."), None);
+        assert_eq!(last_segment(""), None);
+        assert_eq!(last_segment("C:\\Users\\Baell\\.."), None);
+    }
+
+    #[test]
+    fn a_download_creates_the_folder_and_stays_inside_it() {
+        let root = std::env::temp_dir().join(format!("baell-download-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let downloads = root.join(DOWNLOADS);
+        let download = download_service(downloads.clone());
+        // A fresh install has no Downloads folder: the first export must still succeed.
+        download("../../escape.txt", b"inside").expect("the first download should create Downloads");
+        assert_eq!(std::fs::read(downloads.join("escape.txt")).unwrap(), b"inside".as_slice());
+        assert!(!root.join("escape.txt").exists(), "the file must not escape Downloads");
+        assert!(download("..", b"nope").is_err(), "`..` is not a file name");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

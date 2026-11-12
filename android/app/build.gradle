@@ -8,6 +8,18 @@ plugins {
     id 'com.android.application' version '8.5.2'
 }
 
+// The release workflow derives both values from the tag (v0.18.1-android.1 →
+// versionName 0.18.1-android.1, versionCode 180101) and passes them as BAELL_VERSION_NAME and
+// BAELL_VERSION_CODE. Local builds fall back to the values below.
+//
+// versionCode must strictly increase for every release, or Android refuses to install the update
+// over the previous one. VersionName is what people see in Settings ▸ Apps.
+def baellVersionName = System.getenv('BAELL_VERSION_NAME') ?: '0.18.1'
+def baellVersionCode = (System.getenv('BAELL_VERSION_CODE') ?: '1').toInteger()
+if (baellVersionCode < 1) {
+    throw new GradleException("BAELL_VERSION_CODE must be a positive integer, got ${baellVersionCode}")
+}
+
 android {
     namespace 'ai.baell.word'
     compileSdk 35
@@ -16,8 +28,8 @@ android {
         applicationId 'ai.baell.word'
         minSdk 24
         targetSdk 35
-        versionCode 1
-        versionName '0.18.1' // the upstream WordCraft version this port tracks
+        versionCode baellVersionCode
+        versionName baellVersionName
     }
 
     // One APK per ABI plus a universal one, so a phone downloads only its own libraries.
