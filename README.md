@@ -277,6 +277,20 @@ closer pagination fidelity, a stability sweep and native printing. Details and e
 
 **Download WordCraft** from GitHub: the [latest release](https://github.com/storytold/wordcraft/releases/latest) has every build listed below, and [all releases](https://github.com/storytold/wordcraft/releases) has earlier versions and their notes. `<ver>` in the file names is the version number, and `SHA256SUMS.txt` lists a checksum for every file.
 
+### Android (Baell)
+
+| Build | File | Notes |
+|---|---|---|
+| arm64-v8a (modern phones) | `WordCraft-Baell-<tag>-arm64-v8a.apk` | Install this one |
+| armeabi-v7a (older 32-bit phones) | `WordCraft-Baell-<tag>-armeabi-v7a.apk` | |
+| Universal | `WordCraft-Baell-<tag>-universal.apk` | Every ABI in one file |
+| Play Store / bundletool | `WordCraft-Baell-<tag>.aab` | |
+
+`<tag>` is the release tag, for example `v0.18.1-android.1`. Every APK and the AAB is signed
+with the same release key, so a newer release installs over the previous one. Install with
+`adb install <apk>` or by opening the APK on the phone. Package: `ai.baell.word`. Build and
+signing details: [docs/BUILD.md](docs/BUILD.md) and [docs/RELEASE.md](docs/RELEASE.md).
+
 ### Windows
 
 | Build | Installer | Portable |
