@@ -5,9 +5,9 @@ use std::sync::Arc;
 use std::sync::mpsc;
 
 use eframe::egui;
+use winit::platform::android::EventLoopBuilderExtAndroid as _;
 use wordcraft_engine::Session;
 use wordcraft_ui_egui::{FileDialogAnswer, FileDialogRequest, Services, UiState, WordApp};
-use winit::platform::android::EventLoopBuilderExtAndroid as _;
 
 /// Where exports the app asks to download (PDF, HTML and friends) go when there is no system
 /// file dialog to name a destination.
