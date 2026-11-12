@@ -1,8 +1,8 @@
 //! The Android host: `android_main`, the eframe app wrapper and the platform services.
 
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::mpsc;
 
 use eframe::egui;
 use wordcraft_engine::Session;
@@ -47,11 +47,7 @@ pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
 
 /// Runs the app for this activity, from `android_main` (see `lib.rs`).
 pub fn run(app: winit::platform::android::activity::AndroidApp) {
-    android_logger::init_once(
-        android_logger::Config::default()
-            .with_tag("WordCraft")
-            .with_max_level(log::LevelFilter::Info),
-    );
+    android_logger::init_once(android_logger::Config::default().with_tag("WordCraft").with_max_level(log::LevelFilter::Info));
     log::info!("WordCraft (Baell) {} starting", env!("CARGO_PKG_VERSION"));
 
     // The activity's internal data directory holds everything the user keeps (preferences,
@@ -77,16 +73,9 @@ pub fn run(app: winit::platform::android::activity::AndroidApp) {
             return;
         }
     };
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_title("WordCraft"),
-        ..Default::default()
-    };
-    let mut winit_app = eframe::create_native(
-        "WordCraft",
-        options,
-        Box::new(move |cc| creator(cc, data_dir.as_deref(), downloads_dir.as_deref())),
-        &event_loop,
-    );
+    let options = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_title("WordCraft"), ..Default::default() };
+    let mut winit_app =
+        eframe::create_native("WordCraft", options, Box::new(move |cc| creator(cc, data_dir.as_deref(), downloads_dir.as_deref())), &event_loop);
     if let Err(e) = event_loop.run_app(&mut winit_app) {
         log::error!("event loop: {e}");
     }
