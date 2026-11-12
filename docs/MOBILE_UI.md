@@ -26,9 +26,10 @@ search — rather than a separate mobile shell.
   desktop uses when no system dialog is available. It reads paths the app may access: the
   app's own folders always, and shared storage on Android 12L and below (the app requests
   `READ_EXTERNAL_STORAGE` only up to API 32).
-- **Downloads**: exports the app would hand to a "download" go into the app's data directory
-  (`Android/data/ai.baell.word/files/Downloads` on the device), reachable with any file
-  manager.
+- **Downloads**: exports the app would hand to a "download" go into the app's external files
+  directory (`Android/data/ai.baell.word/files/Downloads` on the device). On Android 10 and
+  older any file manager can open it; on Android 11 and newer the system restricts that folder,
+  so use File ▸ Save As (the built-in browser) when the file has to go somewhere else.
 - **Everything the user keeps** lives in the app's internal data directory: preferences
   (`ui.json`), document recovery (`recovery/`), user-added fonts (`fonts/`), personal
   templates (`Templates/`) and the custom dictionary. The Android recovery pass is wired the

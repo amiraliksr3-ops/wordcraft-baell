@@ -14,8 +14,9 @@
 //!
 //! Everything the user keeps lives under the activity's internal data directory:
 //! `ui.json` (preferences), `recovery/` (document recovery), `fonts/`, `Templates/` and
-//! `custom-dictionary.txt`. Files the app "downloads" (exports without a dialog path) are
-//! written next to them, and can be reached from other apps through the device's file manager.
+//! `custom-dictionary.txt`. Files the app "downloads" (exports without a dialog path) go to the
+//! external `Downloads` folder instead, with the internal one as a fallback when external
+//! storage is unavailable.
 //!
 //! ## Unsafe exception
 //!

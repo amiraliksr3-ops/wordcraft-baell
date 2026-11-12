@@ -101,9 +101,12 @@ gradle :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
 ```
 
-For release APKs and an AAB, add the injected signing properties:
+For release APKs and an AAB, add the injected signing properties, and set the same version the
+GitHub release uses so a local build installs over (not under) a published one:
 
 ```bash
+export BAELL_VERSION_NAME=0.18.1-android.1
+export BAELL_VERSION_CODE=180101
 gradle :app:assembleRelease :app:bundleRelease \
   -Pandroid.injected.signing.store.file=/path/to/keystore.jks \
   -Pandroid.injected.signing.store.password=… \
