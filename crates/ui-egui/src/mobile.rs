@@ -195,10 +195,7 @@ fn sheet(app: &mut WordApp, ui: &mut Ui, ctx: &egui::Context, t: Tokens) {
     egui::Panel::bottom("mobile_sheet")
         .exact_size(height)
         .frame(
-            egui::Frame::NONE
-                .fill(t.ribbon)
-                .inner_margin(egui::Margin { left: 6, right: 6, top: 2, bottom: 4 })
-                .stroke(Stroke::new(1.0, t.border)),
+            egui::Frame::NONE.fill(t.ribbon).inner_margin(egui::Margin { left: 6, right: 6, top: 2, bottom: 4 }).stroke(Stroke::new(1.0, t.border)),
         )
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -234,10 +231,7 @@ mod tests {
 
     /// Run one frame in a window of this width; the body runs inside it.
     fn frame(ctx: &egui::Context, width: f32, mut body: impl FnMut(&mut Ui)) {
-        let input = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 700.0))),
-            ..Default::default()
-        };
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 700.0))), ..Default::default() };
         ctx.run_ui(input, |ui| body(ui)).drop_without_applying_deltas();
     }
 
