@@ -23,7 +23,7 @@ const PHONE_WIDTH: f32 = 720.0;
 
 /// A tab's ribbon sheet is open or closed; kept in egui's per-context memory.
 fn sheet_id() -> egui::Id {
-    egui::Id::new("wordcraft_mobile_sheet")
+    egui::Id::unique("wordcraft_mobile_sheet")
 }
 
 /// Whether the window is phone-shaped.
@@ -77,7 +77,7 @@ fn toast(app: &WordApp, ctx: &egui::Context, t: Tokens) {
     }
     let width = (ctx.content_rect().width() - 24.0).max(80.0);
     let at = pos2(12.0, ctx.content_rect().height() - 132.0);
-    egui::Area::new(egui::Id::new("wordcraft_mobile_toast")).order(egui::Order::Foreground).fixed_pos(at).show(ctx, |ui| {
+    egui::Area::new(egui::Id::unique("wordcraft_mobile_toast")).order(egui::Order::Foreground).fixed_pos(at).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.set_max_width(width);
             ui.label(egui::RichText::new(msg).font(regular(12.0)).color(t.text));
