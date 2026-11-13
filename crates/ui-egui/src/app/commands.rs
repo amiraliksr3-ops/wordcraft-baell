@@ -1168,7 +1168,14 @@ impl WordApp {
             return;
         }
         let path = std::path::PathBuf::from(name);
-        let path = if path.is_absolute() { path } else { match &self.services.files_dir { Some(dir) => dir.join(&path), None => path } };
+        let path = if path.is_absolute() {
+            path
+        } else {
+            match &self.services.files_dir {
+                Some(dir) => dir.join(&path),
+                None => path,
+            }
+        };
         self.session.path = Some(path);
     }
 }
