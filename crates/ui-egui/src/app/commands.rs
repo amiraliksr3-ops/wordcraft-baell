@@ -187,35 +187,15 @@ impl WordApp {
             }
             if marked_saved {
                 self.session.dirty = false;
-                // The host page keeps the file under this name now, as a desktop save would. A
-                // name with no folder lands in the host's default folder (a phone's Documents),
-                // and the document's path is that whole path, so the title and the next Save
-                // agree on where the file is.
-                if self.services.host_save.is_some() {
-                    let path = std::path::PathBuf::from(&name);
-                    let path = if path.is_absolute() {
-                        path
-                    } else {
-                        match &self.services.files_dir {
-                            Some(dir) => dir.join(&path),
-                            None => path,
-                        }
-                    };
-                    self.session.path = Some(path);
-                }
+                // The host page keeps the file under this name now, as a desktop save would.
+                self.record_saved_file(&name);
                 // A phone has no status bar, and a save that writes to a folder the user never sees
                 // must still say where it went; the phone shell shows this as a toast.
-                let shown = std::path::Path::new(&name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| name.clone());
-                let shown = crate::i18n::isolate_path(&shown);
-                let msg = i18n::fmt(tl!("Saved {name}"), &[("name", shown.as_str())]);
-                self.status(msg);
+                self.status(i18n::fmt(tl!("Saved {name}"), &[("name", &shown_file_name(&name))]));
             } else if self.services.host_save.is_some() {
                 // An export writes a file the same way; say so, or a phone (with no status bar
                 // and no browser download shelf) gives no sign that it worked.
-                let shown = std::path::Path::new(&name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| name.clone());
-                let shown = crate::i18n::isolate_path(&shown);
-                let msg = i18n::fmt(tl!("Exported {path}"), &[("path", shown.as_str())]);
-                self.status(msg);
+                self.status(i18n::fmt(tl!("Exported {path}"), &[("path", &shown_file_name(&name))]));
             }
             // The browser's picker writes the file later (#1315): until it says how that went,
             // the document's save isn't confirmed.
@@ -1177,4 +1157,25 @@ fn flushes_comment_drafts(id: &str, params: &Value) -> bool {
 /// replace only an untouched blank document, which has nothing to lose).
 pub(crate) fn discards_document(id: &str, _params: &Value) -> bool {
     id == "file.close"
+}
+
+impl WordApp {
+    /// A host save wrote `name`: that file is the document's file now, as a desktop save's path
+    /// is. A bare name lands in the host's default folder (a phone's Documents), so the stored
+    /// path is absolute there and the title and the next Save agree on where the file is.
+    fn record_saved_file(&mut self, name: &str) {
+        if self.services.host_save.is_none() {
+            return;
+        }
+        let path = std::path::PathBuf::from(name);
+        let path = if path.is_absolute() { path } else { match &self.services.files_dir { Some(dir) => dir.join(&path), None => path } };
+        self.session.path = Some(path);
+    }
+}
+
+/// The file name of a saved path, isolated so an embedded English name keeps its direction in a
+/// right-to-left interface. A path with no file name (should not happen) is shown whole.
+fn shown_file_name(name: &str) -> String {
+    let file = std::path::Path::new(name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| name.to_string());
+    crate::i18n::isolate_path(&file)
 }
