@@ -52,6 +52,15 @@ shell and the desktop can still be used at full size.
   or export that only has a file name (an untitled document, a PDF export) goes to the app's
   `Documents` folder (`Android/data/ai.baell.word/files/Documents` on the device); for a save,
   that folder then becomes the document's folder.
+- **Scripts**: Persian, Arabic, Hebrew and CJK text is shaped and laid out by the same engine code
+  as the desktop: the full Unicode bidirectional algorithm, Arabic joining and the complex-script
+  font properties. The glyphs come from the device's own fonts (`/system/fonts`, plus
+  `/product/fonts` and `/vendor/fonts` on newer releases), because this build ships no bundled
+  Arabic face; on Android those include Noto Naskh Arabic and the CJK faces. Typing Persian as the
+  first letters of an empty paragraph makes the paragraph right-to-left, as on the desktop, and the
+  Font list shows the device's installed families as well as the bundled ones. The system font
+  catalog is scanned on a background thread at startup, so the first Persian character laid out
+  does not hold up the frame.
 - **Everything the user keeps** lives in the app's internal data directory: preferences
   (`ui.json`), document recovery (`recovery/`), user-added fonts (`fonts/`), personal
   templates (`Templates/`) and the custom dictionary. The Android recovery pass is wired the

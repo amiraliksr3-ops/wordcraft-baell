@@ -234,6 +234,12 @@ pub fn system_font_dirs() -> Vec<std::path::PathBuf> {
         if let Some(l) = std::env::var_os("LOCALAPPDATA") {
             dirs.push(std::path::PathBuf::from(l).join("Microsoft\\Windows\\Fonts"));
         }
+    } else if cfg!(target_os = "android") {
+        // Android's own fonts, which no app folder holds: the system's, and the ones newer
+        // releases keep in the product and vendor partitions. They include Noto Naskh Arabic
+        // (Persian and Arabic letters) and the CJK faces, so text those scripts write is drawn
+        // with real glyphs instead of the fallback boxes.
+        dirs.extend(["/system/fonts", "/system/font", "/product/fonts", "/vendor/fonts"].map(Into::into));
     } else {
         dirs.extend(["/usr/share/fonts", "/usr/local/share/fonts"].map(Into::into));
         if let Some(h) = &home {

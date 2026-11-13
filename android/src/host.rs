@@ -130,6 +130,10 @@ fn build(
         app.replace_startup_document(doc);
     }
     load_user_fonts(data_dir);
+    // Android keeps its fonts in the system folders (see `system_font_dirs`); cataloging them
+    // reads the name tables of a few hundred files. That runs off the UI thread here, so the
+    // first Persian or CJK character laid out later does not stall the frame that draws it.
+    wordcraft_fonts::FontDb::global().scan_in_background();
     if let Some(dir) = data_dir {
         let ctx = cc.egui_ctx.clone();
         let repaint = Arc::new(move || ctx.request_repaint());
