@@ -108,7 +108,7 @@ fn big_button(ui: &mut Ui, app: &mut WordApp, icon: &str, label: &str, id: &str,
     let t = Tokens::get(ui.ctx());
     let galley_w =
         label.split('\n').map(|l| ui.ctx().fonts_mut(|f| f.layout_no_wrap(l.to_string(), regular(11.5), t.text).size().x)).fold(0.0, f32::max);
-    let min_w = if crate::mobile::touch(ui.ctx()) { 56.0 } else { 44.0 };
+    let min_w = if crate::mobile::touch_controls(ui.ctx()) { 56.0 } else { 44.0 };
     let w = (galley_w + 12.0).max(min_w);
     let (r, resp) = ui.allocate_exact_size(vec2(w, CONTENT_H), Sense::click());
     keytip_badge(ui, r, id, &label.replace('\n', " "));
@@ -152,7 +152,7 @@ pub fn small(ui: &mut Ui, app: &mut WordApp, icon: &str, label: Option<&str>, ti
     let t = Tokens::get(ui.ctx());
     let text_w = label.map(|l| ui.ctx().fonts_mut(|f| f.layout_no_wrap(l.to_string(), regular(11.5), t.text).size().x) + 6.0).unwrap_or(0.0);
     // A finger needs a bigger target than a mouse pointer: 34 × 32 on a phone, 24 × 22 on a desktop.
-    let phone = crate::mobile::touch(ui.ctx());
+    let phone = crate::mobile::touch_controls(ui.ctx());
     let (btn_w, btn_h) = if phone { (34.0, 32.0) } else { (24.0, 22.0) };
     let (r, resp) = ui.allocate_exact_size(vec2(btn_w + text_w, btn_h), Sense::click());
     keytip_badge(ui, r, id, tip);
@@ -190,7 +190,7 @@ pub fn split(
     let ButtonAction { id, params, checked } = action;
     let tip = tl!(tip);
     let t = Tokens::get(ui.ctx());
-    let phone = crate::mobile::touch(ui.ctx());
+    let phone = crate::mobile::touch_controls(ui.ctx());
     let (main_w, arrow_w, h) = if phone { (36.0, 16.0, 32.0) } else { (24.0, 11.0, 22.0) };
     let (r, resp) = ui.allocate_exact_size(vec2(main_w, h), Sense::click());
     keytip_badge(ui, r, id, tip);

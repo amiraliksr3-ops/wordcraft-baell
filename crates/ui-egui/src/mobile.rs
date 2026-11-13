@@ -10,10 +10,10 @@
 //! - a 58 px bottom bar of ribbon tabs; tapping one shows that tab's controls in a sheet above
 //!   the bar, the same controls the desktop ribbon draws ([`crate::ribbon::tab_content`]).
 //!
-//! The layout follows the window's width, not the platform, so a small desktop window gets the
-//! same usable shell.
+//! The shell is Android's: it replaces desktop chrome only on a phone-shaped Android window, so a
+//! narrow desktop window keeps the mouse-and-keyboard layout it has always had.
 
-use egui::{Align, Align2, Rect, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Align, Align2, Rect, Sense, Stroke, Ui, Vec2, pos2, vec2};
 
 use crate::theme::{Tokens, medium, regular, semibold};
 use crate::{WordApp, icons};
@@ -26,18 +26,51 @@ fn sheet_id() -> egui::Id {
     egui::Id::unique("wordcraft_mobile_sheet")
 }
 
-/// Whether the window is phone-shaped.
-pub(crate) fn touch(ctx: &egui::Context) -> bool {
-    ctx.content_rect().width() < PHONE_WIDTH
+/// Whether a window of this width is phone-shaped: the desktop title bar, tab strip, ribbon and
+/// status bar do not fit under [`PHONE_WIDTH`].
+pub(crate) fn phone_width(width: f32) -> bool {
+    width < PHONE_WIDTH
 }
 
-/// Make the shared widgets finger-sized while the window is phone-shaped. Called once per frame
-/// from [`WordApp::logic`](crate::WordApp) after the theme is applied, so it wins over the
-/// desktop metrics and is restored when the window grows again. It writes only when the size is
-/// not already what this window needs, so a phone does not rebuild its styles every frame.
+/// Whether this window gets the phone shell and finger-sized controls. The shell belongs to
+/// Android: a narrow desktop window is still driven by a mouse and keyboard, and keeps the
+/// desktop chrome (and its tests) exactly as it was.
+pub(crate) fn touch(ctx: &egui::Context) -> bool {
+    cfg!(target_os = "android") && phone_width(ctx.content_rect().width())
+}
+
+/// The mini toolbar's controls: it keeps the desktop's widget sizes even on a phone, because its
+/// fixed two-row layout (`mini_toolbar::BAR_W`) was measured for them. Finger-sized buttons would
+/// spill out of the bar and off a narrow window.
+fn compact_controls_id() -> egui::Id {
+    egui::Id::unique("wordcraft_compact_controls")
+}
+
+/// Whether shared controls should use the finger-sized metrics right now.
+pub(crate) fn touch_controls(ctx: &egui::Context) -> bool {
+    touch(ctx) && !ctx.data(|d| d.get_temp::<bool>(compact_controls_id()).unwrap_or(false))
+}
+
+/// Draw `f` with the desktop control metrics, for the fixed-size mini toolbar.
+pub(crate) fn with_compact_controls<R>(ctx: &egui::Context, f: impl FnOnce() -> R) -> R {
+    ctx.data_mut(|d| d.insert_temp(compact_controls_id(), true));
+    let out = f();
+    ctx.data_mut(|d| d.insert_temp(compact_controls_id(), false));
+    out
+}
+
+/// The shared spacing metrics for a phone-shaped window (`true`) or a desktop one.
+fn metrics(phone: bool) -> (Vec2, Vec2, i8) {
+    if phone { (vec2(34.0, 34.0), vec2(9.0, 5.0), 8) } else { (vec2(24.0, 22.0), vec2(8.0, 3.0), 6) }
+}
+
+/// Make the shared widgets finger-sized on a phone. Called once per frame from
+/// [`WordApp::logic`](crate::WordApp) after the theme is applied, so it wins over the desktop
+/// metrics and is restored when the window grows again. It writes only when the size is not
+/// already what this window needs, so a phone does not rebuild its styles every frame.
 pub(crate) fn apply_touch_style(ctx: &egui::Context) {
     let phone = touch(ctx);
-    let (interact, padding, menu) = if phone { (vec2(34.0, 34.0), vec2(9.0, 5.0), 8) } else { (vec2(24.0, 22.0), vec2(8.0, 3.0), 6) };
+    let (interact, padding, menu) = metrics(phone);
     if ctx.style_of(egui::Theme::Dark).spacing.interact_size == interact {
         return;
     }
@@ -236,24 +269,30 @@ mod tests {
     }
 
     #[test]
-    fn a_narrow_window_is_a_phone_and_a_wide_one_is_not() {
-        let ctx = egui::Context::default();
+    fn a_narrow_window_is_phone_shaped_and_a_wide_one_is_not() {
         for (width, phone) in [(360.0, true), (719.0, true), (720.0, false), (1280.0, false)] {
-            let mut seen = None;
-            frame(&ctx, width, |ui| seen = Some(touch(ui.ctx())));
-            assert_eq!(seen, Some(phone), "width {width}");
+            assert_eq!(phone_width(width), phone, "width {width}");
         }
     }
 
+    /// The shell is Android's: a narrow window on a desktop keeps the desktop chrome, so its
+    /// layout (and the tests that pin it) stay as they were.
     #[test]
-    fn touch_metrics_follow_the_window_and_restore_the_desktop_ones() {
+    fn the_shell_is_android_only() {
         let ctx = egui::Context::default();
-        let mut phone = None;
-        frame(&ctx, 360.0, |ui| {
-            apply_touch_style(ui.ctx());
-            phone = Some(ui.ctx().style_of(egui::Theme::Light).spacing.interact_size);
-        });
-        assert_eq!(phone, Some(vec2(34.0, 34.0)));
+        let mut seen = None;
+        frame(&ctx, 360.0, |ui| seen = Some(touch(ui.ctx())));
+        assert_eq!(seen, Some(cfg!(target_os = "android")));
+    }
+
+    #[test]
+    fn touch_metrics_grow_and_shrink_with_the_shell() {
+        assert_eq!(metrics(true).0, vec2(34.0, 34.0));
+        assert_eq!(metrics(true).1, vec2(9.0, 5.0));
+        assert_eq!(metrics(false).0, vec2(24.0, 22.0));
+        assert_eq!(metrics(false).1, vec2(8.0, 3.0));
+        // Applying the desktop metrics leaves a desktop window unchanged.
+        let ctx = egui::Context::default();
         let mut desktop = None;
         frame(&ctx, 1280.0, |ui| {
             apply_touch_style(ui.ctx());

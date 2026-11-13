@@ -15,9 +15,10 @@ scrolling and pinch zoom work where egui reports the gestures.
 
 ## The phone layout
 
-A window narrower than **720 points** gets a touch shell instead of the desktop chrome. The
-layout follows the window's width, not the platform, so a small desktop window gets the same
-shell and the desktop can still be used at full size.
+On Android, a window narrower than **720 points** gets a touch shell instead of the desktop
+chrome. The shell is the phone's: a desktop window keeps its mouse-and-keyboard chrome even when
+it is narrow, so the desktop layout is unchanged at every size. On a tablet in landscape (720
+points or wider) the desktop chrome returns; so does the desktop shell if the window is widened.
 
 - **Top bar (52 px)**: File, Save, Undo, Redo and Search, each a 52 × 48 touch target. File opens
   the Backstage; Search opens command search.
@@ -30,7 +31,9 @@ shell and the desktop can still be used at full size.
   `▾` button hides it; tapping any tab brings it back.
 - **Touch metrics**: ribbon buttons are wider and taller than on the desktop (big buttons at
   least 56 px wide, small ones 34 × 32), and general widgets (check boxes, list rows, dialog
-  buttons) get a 34 px minimum hit area while the window is phone-shaped.
+  buttons) get a 34 px minimum hit area while the shell is on. The selection mini toolbar keeps
+  the desktop's control sizes: its fixed two-row width was measured for them, and finger-sized
+  buttons would spill out of it and off a narrow screen.
 - **Dialogs** clamp their width to the screen (the built-in file browser, the first one that
   mattered, is 620 px on the desktop and the window width minus 24 px on a phone).
 - **Backstage**: the left navigation becomes a 72 px icon rail.

@@ -235,8 +235,13 @@ pub fn show_in_context_menu(app: &mut WordApp, ui: &mut egui::Ui) {
 }
 
 /// The controls in two rows like Word's mini toolbar, reusing the ribbon's widgets so the bar
-/// matches the ribbon exactly.
+/// matches the ribbon exactly. The rows are measured for desktop metrics, so a phone still draws
+/// them at that size: finger-sized buttons would not fit the bar or a narrow window.
 fn content(app: &mut WordApp, ui: &mut egui::Ui, t: &Tokens, preview_on_hover: bool) {
+    crate::mobile::with_compact_controls(ui.ctx(), || content_inner(app, ui, t, preview_on_hover));
+}
+
+fn content_inner(app: &mut WordApp, ui: &mut egui::Ui, t: &Tokens, preview_on_hover: bool) {
     let st: Value = app.session.run("format.state", &json!({})).unwrap_or_default();
     let flag = |k: &str| st.get(k).and_then(Value::as_bool).unwrap_or(false);
     // As on the ribbon, the buttons show alignment as seen on the page (#3579).
