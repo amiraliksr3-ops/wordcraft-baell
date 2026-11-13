@@ -238,7 +238,8 @@ pub fn show_in_context_menu(app: &mut WordApp, ui: &mut egui::Ui) {
 /// matches the ribbon exactly. The rows are measured for desktop metrics, so a phone still draws
 /// them at that size: finger-sized buttons would not fit the bar or a narrow window.
 fn content(app: &mut WordApp, ui: &mut egui::Ui, t: &Tokens, preview_on_hover: bool) {
-    crate::mobile::with_compact_controls(ui.ctx(), || content_inner(app, ui, t, preview_on_hover));
+    let ctx = ui.ctx().clone();
+    crate::mobile::with_compact_controls(&ctx, || content_inner(app, ui, t, preview_on_hover));
 }
 
 fn content_inner(app: &mut WordApp, ui: &mut egui::Ui, t: &Tokens, preview_on_hover: bool) {
