@@ -67,6 +67,12 @@ impl WordApp {
     pub(super) fn paint_window(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, t: theme::Tokens) {
         let window = self.windows.shown();
         let moved = |app: &WordApp| app.windows.shown() != window;
+        // A phone-shaped window gets the touch shell instead of the desktop chrome. Native
+        // multi-window keeps its desktop layout, where each window has room for it.
+        if crate::mobile::touch(ctx) && !self.windows.native() {
+            crate::mobile::paint(self, ui, ctx, t);
+            return;
+        }
         if self.ui.backstage {
             backstage::show(self, ui);
         } else if !self.has_document() {

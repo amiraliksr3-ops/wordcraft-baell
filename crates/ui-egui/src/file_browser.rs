@@ -21,6 +21,11 @@ const MAX_LISTED: usize = 5000;
 const MAX_SCANNED: usize = 100_000;
 const ROW: f32 = 24.0;
 
+/// The row height: a finger needs more than a mouse, so a phone's rows are taller.
+fn row_height(ctx: &egui::Context) -> f32 {
+    if crate::mobile::touch(ctx) { 40.0 } else { ROW }
+}
+
 /// The browser while it is open, and the folder it showed last (where it opens next time).
 #[derive(Default)]
 pub(crate) struct State {
@@ -267,6 +272,7 @@ impl WordApp {
         let start = asked
             .or_else(|| self.file_browser.last_dir.clone().filter(|d| d.is_dir()))
             .or_else(|| self.session.path.as_ref().and_then(|p| p.parent()).map(Path::to_path_buf).filter(|d| d.is_dir()))
+            .or_else(|| self.services.files_dir.clone().filter(|d| d.is_dir()))
             .or_else(home)
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("/"));
@@ -315,7 +321,9 @@ pub(crate) fn show(app: &mut WordApp, ctx: &egui::Context) {
     let id = egui::Id::unique("builtin_file_browser");
     let window = egui::Window::new(tl!(b.title())).id(id).collapsible(false).resizable(false).anchor(Align2::CENTER_CENTER, vec2(0.0, -20.0));
     let shown = crate::window_close::window(ctx, window).show(ctx, |ui| {
-        ui.set_width(620.0);
+        // A phone is narrower than the desktop window this was sized for: use what it has, and
+        // keep the list short enough that the name field and buttons stay on screen.
+        ui.set_width((ctx.content_rect().width() - 24.0).clamp(260.0, 620.0));
         done = crate::rtl::root(ui, |ui| body(ui, &mut b, &t));
     });
     if let Some(s) = &shown {
@@ -336,12 +344,14 @@ pub(crate) fn show(app: &mut WordApp, ctx: &egui::Context) {
 /// The browser's contents; `Some` once it closes (`Some(None)`: cancelled).
 fn body(ui: &mut Ui, b: &mut FileBrowser, t: &Tokens) -> Option<Option<PathBuf>> {
     if b.unavailable {
-        ui.label(
-            egui::RichText::new(tl!(
-                "The system file dialog isn't available, so WordCraft shows its own. To get the system dialog, install a file chooser portal (such as xdg-desktop-portal-gtk) or zenity."
-            ))
-            .color(t.text_dim),
-        );
+        // A phone has no system file dialog at all, so the Linux portal/zenity advice would be
+        // noise there; the plain sentence is true everywhere.
+        let why = tl!(if cfg!(target_os = "android") {
+            "WordCraft shows its own file browser here. Choose a folder and a file name."
+        } else {
+            "The system file dialog isn't available, so WordCraft shows its own. To get the system dialog, install a file chooser portal (such as xdg-desktop-portal-gtk) or zenity."
+        });
+        ui.label(egui::RichText::new(why).color(t.text_dim));
         ui.add_space(6.0);
     }
     let mut location_done = false;
@@ -371,9 +381,11 @@ fn body(ui: &mut Ui, b: &mut FileBrowser, t: &Tokens) -> Option<Option<PathBuf>>
         let entries: &[Entry] = b.listing.as_ref().map(|l| l.entries.as_slice()).unwrap_or(&[]);
         // An unreadable folder has its own message below; the hint is for a listing that came back empty.
         let listed = b.listing.is_ok();
-        egui::ScrollArea::vertical().max_height(300.0).min_scrolled_height(300.0).auto_shrink([false, false]).show_rows(
+        let row = row_height(ui.ctx());
+        let list_h = if crate::mobile::touch(ui.ctx()) { 240.0 } else { 300.0 };
+        egui::ScrollArea::vertical().max_height(list_h).min_scrolled_height(list_h).auto_shrink([false, false]).show_rows(
             ui,
-            ROW,
+            row,
             entries.len(),
             |ui, range| {
                 if listed && entries.is_empty() {
@@ -385,7 +397,7 @@ fn body(ui: &mut Ui, b: &mut FileBrowser, t: &Tokens) -> Option<Option<PathBuf>>
                     });
                 }
                 for e in entries.get(range).unwrap_or(&[]) {
-                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::click());
+                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row), Sense::click());
                     if b.selected.as_ref() == Some(&e.path) {
                         ui.painter().rect_filled(r, 2.0, t.checked);
                     } else if resp.hovered() {

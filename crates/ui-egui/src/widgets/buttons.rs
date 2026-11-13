@@ -108,7 +108,8 @@ fn big_button(ui: &mut Ui, app: &mut WordApp, icon: &str, label: &str, id: &str,
     let t = Tokens::get(ui.ctx());
     let galley_w =
         label.split('\n').map(|l| ui.ctx().fonts_mut(|f| f.layout_no_wrap(l.to_string(), regular(11.5), t.text).size().x)).fold(0.0, f32::max);
-    let w = (galley_w + 12.0).max(44.0);
+    let min_w = if crate::mobile::touch(ui.ctx()) { 56.0 } else { 44.0 };
+    let w = (galley_w + 12.0).max(min_w);
     let (r, resp) = ui.allocate_exact_size(vec2(w, CONTENT_H), Sense::click());
     keytip_badge(ui, r, id, &label.replace('\n', " "));
     let on = enabled(app, id);
@@ -150,16 +151,21 @@ pub fn small(ui: &mut Ui, app: &mut WordApp, icon: &str, label: Option<&str>, ti
     let label = label.filter(|_| !crate::ribbon_fit::compact(ui.ctx()));
     let t = Tokens::get(ui.ctx());
     let text_w = label.map(|l| ui.ctx().fonts_mut(|f| f.layout_no_wrap(l.to_string(), regular(11.5), t.text).size().x) + 6.0).unwrap_or(0.0);
-    let (r, resp) = ui.allocate_exact_size(vec2(24.0 + text_w, 22.0), Sense::click());
+    // A finger needs a bigger target than a mouse pointer: 34 × 32 on a phone, 24 × 22 on a desktop.
+    let phone = crate::mobile::touch(ui.ctx());
+    let (btn_w, btn_h) = if phone { (34.0, 32.0) } else { (24.0, 22.0) };
+    let (r, resp) = ui.allocate_exact_size(vec2(btn_w + text_w, btn_h), Sense::click());
     keytip_badge(ui, r, id, tip);
     let on = enabled(app, id);
     bg_if(ui, r, &resp, checked, &t, on);
     let rtl = crate::rtl::flows(ui);
-    let ic = Rect::from_center_size(pos2(crate::rtl::lead_x(rtl, r, 12.0), r.center().y), vec2(17.0, 17.0));
+    let icon_size = if phone { 20.0 } else { 17.0 };
+    let icon_x = if phone { 15.0 } else { 12.0 };
+    let ic = Rect::from_center_size(pos2(crate::rtl::lead_x(rtl, r, icon_x), r.center().y), vec2(icon_size, icon_size));
     let (c, a) = if on { (t.icon, t.accent) } else { (t.text_disabled, t.text_disabled) };
     icons::paint(ui.painter(), ic, icon, c, a);
     if let Some(l) = label {
-        let at = pos2(crate::rtl::lead_x(rtl, r, 24.0), r.center().y);
+        let at = pos2(crate::rtl::lead_x(rtl, r, if phone { 30.0 } else { 24.0 }), r.center().y);
         ui.painter().text(at, crate::rtl::lead_center(rtl), l, regular(11.5), if on { t.text } else { t.text_disabled });
     }
     let resp = tooltip(app, resp, tip, id);
@@ -184,13 +190,15 @@ pub fn split(
     let ButtonAction { id, params, checked } = action;
     let tip = tl!(tip);
     let t = Tokens::get(ui.ctx());
-    let (r, resp) = ui.allocate_exact_size(vec2(24.0, 22.0), Sense::click());
+    let phone = crate::mobile::touch(ui.ctx());
+    let (main_w, arrow_w, h) = if phone { (36.0, 16.0, 32.0) } else { (24.0, 11.0, 22.0) };
+    let (r, resp) = ui.allocate_exact_size(vec2(main_w, h), Sense::click());
     keytip_badge(ui, r, id, tip);
-    let (ar, aresp) = ui.allocate_exact_size(vec2(11.0, 22.0), Sense::click());
+    let (ar, aresp) = ui.allocate_exact_size(vec2(arrow_w, h), Sense::click());
     let on = enabled(app, id);
     bg_if(ui, r, &resp, checked, &t, on);
     bg_if(ui, ar, &aresp, false, &t, on);
-    let ic = Rect::from_center_size(r.center(), vec2(17.0, 17.0));
+    let ic = Rect::from_center_size(r.center(), vec2(if phone { 20.0 } else { 17.0 }, if phone { 20.0 } else { 17.0 }));
     let (c, a) = if on { (t.icon, t.accent) } else { (t.text_disabled, t.text_disabled) };
     icons::paint(ui.painter(), ic, icon, c, a);
     if let Some(sw) = swatch {

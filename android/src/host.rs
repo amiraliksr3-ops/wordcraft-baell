@@ -58,12 +58,22 @@ pub fn run(app: winit::platform::android::activity::AndroidApp) {
     // files) where a file manager can reach them. If external storage is unavailable, fall back
     // to the internal directory so an export still succeeds.
     let downloads_dir = app.external_data_path().or_else(|| data_dir.clone());
+    // The user's own files (documents and exports) go to a Documents folder in the same external
+    // area. It is writable without a storage permission, and it is where the built-in file browser
+    // starts, so Save As has somewhere to go on a fresh install.
+    let files_dir = downloads_dir.as_ref().map(|dir| dir.join("Documents"));
     match data_dir.as_deref() {
         Some(dir) => log::info!("data directory: {}", dir.display()),
         None => log::warn!("no data directory from the activity; preferences and recovery are off"),
     }
     if let Some(dir) = downloads_dir.as_deref() {
         log::info!("downloads directory: {}", dir.display());
+    }
+    if let Some(dir) = files_dir.as_deref() {
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            log::warn!("cannot create {}: {e}", dir.display());
+        }
+        log::info!("documents directory: {}", dir.display());
     }
 
     let event_loop = match winit::event_loop::EventLoop::<eframe::UserEvent>::with_user_event().with_android_app(app).build() {
@@ -74,8 +84,12 @@ pub fn run(app: winit::platform::android::activity::AndroidApp) {
         }
     };
     let options = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_title("WordCraft"), ..Default::default() };
-    let mut winit_app =
-        eframe::create_native("WordCraft", options, Box::new(move |cc| creator(cc, data_dir.as_deref(), downloads_dir.as_deref())), &event_loop);
+    let mut winit_app = eframe::create_native(
+        "WordCraft",
+        options,
+        Box::new(move |cc| creator(cc, data_dir.as_deref(), downloads_dir.as_deref(), files_dir.as_deref())),
+        &event_loop,
+    );
     if let Err(e) = event_loop.run_app(&mut winit_app) {
         log::error!("event loop: {e}");
     }
@@ -87,19 +101,25 @@ fn creator(
     cc: &eframe::CreationContext<'_>,
     data_dir: Option<&Path>,
     downloads_dir: Option<&Path>,
+    files_dir: Option<&Path>,
 ) -> Result<Box<dyn eframe::App>, Box<dyn core::error::Error + Send + Sync>> {
-    let app = build(cc, data_dir, downloads_dir).map_err(Box::<dyn core::error::Error + Send + Sync>::from)?;
+    let app = build(cc, data_dir, downloads_dir, files_dir).map_err(Box::<dyn core::error::Error + Send + Sync>::from)?;
     Ok(Box::new(BaellApp(app, data_dir.map(Path::to_path_buf))))
 }
 
 /// The system region picks the new document's paper, the units and the decimal separator (#838),
 /// the same way the desktop and web apps do. Then preferences, the user dictionary, font packs,
 /// recovery, in the desktop app's order.
-fn build(cc: &eframe::CreationContext<'_>, data_dir: Option<&Path>, downloads_dir: Option<&Path>) -> Result<WordApp, String> {
+fn build(
+    cc: &eframe::CreationContext<'_>,
+    data_dir: Option<&Path>,
+    downloads_dir: Option<&Path>,
+    files_dir: Option<&Path>,
+) -> Result<WordApp, String> {
     let region = wordcraft_ui_egui::i18n::system_region();
     let mut session = Session::new(wordcraft_engine::blank_document(&region));
     session.system_region = region;
-    let mut app = WordApp::new(session, services(data_dir, downloads_dir));
+    let mut app = WordApp::new(session, services(data_dir, downloads_dir, files_dir));
     load_prefs(&mut app, data_dir);
     load_user_dictionary(&mut app, data_dir);
     // Language packs from the suite's font store; an Install click is the person's own.
@@ -140,6 +160,26 @@ fn download_service(dir: PathBuf) -> impl Fn(&str, &[u8]) -> Result<(), String> 
     }
 }
 
+/// Save through the built-in browser: an absolute path is written where it says; a bare name (an
+/// export, or a document with no file yet) goes into `fallback`, the folder the app can always
+/// write to. The folder is made when it is missing. An error is returned so Save As can say why it
+/// failed instead of silently losing the document.
+fn save_service(fallback: PathBuf) -> impl Fn(&str, &[u8], bool) -> Result<(), String> {
+    move |name, bytes, _save_as| {
+        let picked = Path::new(name);
+        let out = if picked.is_absolute() {
+            picked.to_path_buf()
+        } else {
+            let Some(name) = last_segment(name) else { return Err("save: no file name".into()) };
+            fallback.join(name)
+        };
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+        }
+        std::fs::write(&out, bytes).map_err(|e| format!("cannot write {}: {e}", out.display()))
+    }
+}
+
 /// The file name of a path, or `None` when it has no usable file name: an empty path, one that
 /// ends in a separator, or a `.`/`..` component that would leave the download folder.
 fn last_segment(path: &str) -> Option<&str> {
@@ -151,12 +191,18 @@ fn last_segment(path: &str) -> Option<&str> {
     Some(segment)
 }
 
-/// The host services a phone can offer: the built-in file browser for dialogs, downloads into
-/// the app's own folder, personal templates and pictures the user inserted before.
-fn services(data_dir: Option<&Path>, downloads_dir: Option<&Path>) -> Services {
+/// The host services a phone can offer: the built-in file browser for dialogs, saves written to the
+/// path that browser picked (or to the app's Documents folder), personal templates and pictures the
+/// user inserted before.
+fn services(data_dir: Option<&Path>, downloads_dir: Option<&Path>, files_dir: Option<&Path>) -> Services {
+    let documents = files_dir.map(Path::to_path_buf);
     Services {
         file_dialog: Some(Box::new(builtin_file_dialog)),
         download: downloads_dir.map(|dir| Box::new(download_service(dir.join(DOWNLOADS))) as Box<dyn Fn(&str, &[u8]) -> Result<(), String>>),
+        // Save and Save As write where the browser pointed, so `session.path` becomes the file and
+        // the next Save (and AutoSave) goes to it. An export with no path lands in Documents.
+        host_save: documents.clone().map(|root| Box::new(save_service(root)) as wordcraft_ui_egui::HostSaveFn),
+        files_dir: documents,
         templates_dir: data_dir.map(|dir| dir.join("Templates")),
         ..Services::default()
     }
@@ -248,6 +294,23 @@ mod tests {
         assert_eq!(std::fs::read(downloads.join("escape.txt")).unwrap(), b"inside".as_slice());
         assert!(!root.join("escape.txt").exists(), "the file must not escape Downloads");
         assert!(download("..", b"nope").is_err(), "`..` is not a file name");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn save_writes_the_picked_path_and_falls_back_to_documents() {
+        let root = std::env::temp_dir().join(format!("baell-save-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let documents = root.join("Documents");
+        std::fs::create_dir_all(&documents).unwrap();
+        let save = save_service(documents.clone());
+        // The built-in browser's answer is an absolute path: it must be written where it says.
+        let picked = documents.join("Report.docx");
+        save(picked.to_str().unwrap(), b"picked", true).expect("the picked path should be written");
+        assert_eq!(std::fs::read(&picked).unwrap(), b"picked".as_slice());
+        // A Save with only a name (an untitled document) lands in Documents.
+        save("Notes.docx", b"fallback", false).expect("the fallback should be written");
+        assert_eq!(std::fs::read(documents.join("Notes.docx")).unwrap(), b"fallback".as_slice());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

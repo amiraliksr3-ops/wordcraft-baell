@@ -285,6 +285,8 @@ impl WordApp {
             theme::apply(ctx, effective);
             self.applied_theme = Some(effective);
         }
+        // A narrow window (a phone) gets finger-sized controls; a wide one gets the desktop's.
+        crate::mobile::apply_touch_style(ctx);
         // Interface size (#475, #822): egui's zoom factor multiplies the display scale the system
         // reports (native pixels per point). Auto keeps that scale; a chosen size divides it back
         // out, so "100%" is one screen pixel per point even where the system's scale is a guess.

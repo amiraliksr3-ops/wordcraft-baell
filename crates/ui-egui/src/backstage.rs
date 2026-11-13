@@ -76,8 +76,11 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
         app.ui.backstage_page = "home".into();
     }
     let mac = app.integrated_titlebar;
+    // A phone's sidebar is a narrow icon rail; the names are in the page headings and tooltips.
+    let phone = crate::mobile::touch(ui.ctx());
+    let nav_w = if phone { 72.0 } else { 200.0 };
     crate::rtl::start_panel("backstage_nav")
-        .exact_size(200.0)
+        .exact_size(nav_w)
         // Fixed width, as in Word: without this egui shows a resize handle that does nothing (#502).
         .resizable(false)
         .frame(egui::Frame::NONE.fill(t.nav).inner_margin(egui::Margin { left: 0, right: 0, top: if mac { 0 } else { 12 }, bottom: 12 }))
@@ -88,7 +91,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 // macOS (#222): the Backstage covers the title bar, so its top band is the title
                 // bar: the back button sits beside the traffic lights, centred with them and as far
                 // from them as the title bar's own controls, and the rest of the band drags the window.
-                let (band, drag) = ui.allocate_exact_size(vec2(200.0, app.mac_titlebar.height), Sense::click_and_drag());
+                let (band, drag) = ui.allocate_exact_size(vec2(nav_w, app.mac_titlebar.height), Sense::click_and_drag());
                 if drag.drag_started() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
@@ -109,10 +112,10 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 );
                 resp
             } else {
-                // The hit area is scoped to the chevron, not the whole 200px-wide row (#3041):
+                // The hit area is scoped to the chevron, not the whole navigation row (#3041):
                 // the row reads as plain sidebar background next to it, so clicking there must
                 // not also close the File page, same as the macOS chevron fix (#2972) below.
-                let (r, _) = ui.allocate_exact_size(vec2(200.0, 40.0), Sense::hover());
+                let (r, _) = ui.allocate_exact_size(vec2(nav_w, 40.0), Sense::hover());
                 let c = pos2(crate::rtl::lead_x(rtl, r, 26.0), r.center().y);
                 let resp = ui.interact(Rect::from_center_size(c, vec2(22.0, r.height())), ui.scope_id().with("backstage_back"), Sense::click());
                 icons::paint(
@@ -133,7 +136,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             for (id, label, icon) in PAGES {
                 // No document open (#1129): Info, Save, Save As, Print and Export are greyed out.
                 let on = has_document || works_without_document(id);
-                let (r, resp) = ui.add_enabled_ui(on, |ui| ui.allocate_exact_size(vec2(200.0, 38.0), Sense::click())).inner;
+                let (r, resp) = ui.add_enabled_ui(on, |ui| ui.allocate_exact_size(vec2(nav_w, 38.0), Sense::click())).inner;
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, on, tl!(label)));
                 let active = app.ui.backstage_page == id;
                 if active {
@@ -142,20 +145,23 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(26));
                 }
                 let ink = if on { egui::Color32::WHITE } else { egui::Color32::from_white_alpha(110) };
+                let icon_x = if phone { r.center().x } else { crate::rtl::lead_x(rtl, r, 31.0) };
                 icons::paint(
                     ui.painter(),
-                    Rect::from_center_size(pos2(crate::rtl::lead_x(rtl, r, 31.0), r.center().y), vec2(18.0, 18.0)),
+                    Rect::from_center_size(pos2(icon_x, r.center().y), vec2(if phone { 22.0 } else { 18.0 }, if phone { 22.0 } else { 18.0 })),
                     icon,
                     ink,
                     ink,
                 );
-                ui.painter().text(
-                    pos2(crate::rtl::lead_x(rtl, r, 52.0), r.center().y),
-                    crate::rtl::lead_center(rtl),
-                    tl!(label),
-                    if active { semibold(14.0) } else { medium(14.0) },
-                    ink,
-                );
+                if !phone {
+                    ui.painter().text(
+                        pos2(crate::rtl::lead_x(rtl, r, 52.0), r.center().y),
+                        crate::rtl::lead_center(rtl),
+                        tl!(label),
+                        if active { semibold(14.0) } else { medium(14.0) },
+                        ink,
+                    );
+                }
                 if on
                     && app.ui.keytips == crate::keytips::Phase::Backstage
                     && let Some(letter) = keytip_letter(id)
@@ -168,13 +174,20 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             }
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
                 for (label, id) in bottom_links(app) {
-                    let (r, resp) = ui.allocate_exact_size(vec2(200.0, 32.0), Sense::click());
+                    let (r, resp) = ui.allocate_exact_size(vec2(nav_w, 32.0), Sense::click());
                     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(label)));
                     if resp.hovered() {
                         ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(26));
                     }
                     let at = pos2(crate::rtl::lead_x(rtl, r, 22.0), r.center().y);
-                    ui.painter().text(at, crate::rtl::lead_center(rtl), tl!(label), regular(13.0), egui::Color32::WHITE);
+                    if phone {
+                        // The rail is too narrow for a side label: centre it and let a long one wrap.
+                        let galley = ui.painter().layout(tl!(label).to_string(), regular(10.0), egui::Color32::WHITE, nav_w - 12.0);
+                        let at = pos2(r.center().x - galley.size().x / 2.0, r.center().y - galley.size().y / 2.0);
+                        ui.painter().galley(at, galley, egui::Color32::WHITE);
+                    } else {
+                        ui.painter().text(at, crate::rtl::lead_center(rtl), tl!(label), regular(13.0), egui::Color32::WHITE);
+                    }
                     if resp.clicked() {
                         if id == "discord" {
                             let _ = app.run("ui.discord", json!({}));
@@ -186,8 +199,9 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             });
         });
     egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(egui::Margin::symmetric(0, 30))).show(ui, |ui| {
-        // The side padding sits inside the pages, so the scroll area reaches the window's edge.
-        let pad = egui::Frame::NONE.inner_margin(egui::Margin::symmetric(40, 0));
+        // The side padding sits inside the pages, so the scroll area reaches the window's edge. A
+        // phone has little width to spare, so its padding is small.
+        let pad = egui::Frame::NONE.inner_margin(egui::Margin::symmetric(if phone { 12 } else { 40 }, 0));
         // The Print page fills the pane and scrolls its settings and its preview itself (#1156).
         if app.ui.backstage_page == "print" {
             pad.show(ui, |ui| crate::rtl::root(ui, |ui| export_page(app, ui)));

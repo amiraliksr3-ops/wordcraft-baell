@@ -103,6 +103,10 @@ pub struct Services {
     /// used while File › Options names none. File › New lists personal templates from it and Save
     /// as Word Template starts in it. `None` (web) hides personal templates.
     pub templates_dir: Option<std::path::PathBuf>,
+    /// Where the built-in file browser starts when nothing better is known: the folder a phone can
+    /// write to without a storage permission (Android: the app's own Documents folder). The
+    /// document's own folder and the folder last used still come first. `None` (desktop, web).
+    pub files_dir: Option<std::path::PathBuf>,
 }
 
 /// Files delivered asynchronously.

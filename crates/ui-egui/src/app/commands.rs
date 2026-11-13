@@ -172,7 +172,8 @@ impl WordApp {
             // save marks it saved. A Save under a name the page never sent (an untitled document,
             // an imported .doc saved as .docx) is a new file too, never an overwrite.
             let opened_name = self.session.path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string());
-            let new_file = id == "file.saveAs" || opened_name.as_deref() != Some(name.as_str());
+            let new_name = std::path::Path::new(&name).file_name().map(|n| n.to_string_lossy().to_string());
+            let new_file = id == "file.saveAs" || opened_name.as_deref() != new_name.as_deref();
             let delivered = match (&self.services.host_save, &self.services.download) {
                 (Some(host), _) => host(&name, &bytes, marked_saved && new_file),
                 (None, Some(download)) => download(&name, &bytes),
@@ -186,10 +187,35 @@ impl WordApp {
             }
             if marked_saved {
                 self.session.dirty = false;
-                // The host page keeps the file under this name now, as a desktop save would.
+                // The host page keeps the file under this name now, as a desktop save would. A
+                // name with no folder lands in the host's default folder (a phone's Documents),
+                // and the document's path is that whole path, so the title and the next Save
+                // agree on where the file is.
                 if self.services.host_save.is_some() {
-                    self.session.path = Some(std::path::PathBuf::from(&name));
+                    let path = std::path::PathBuf::from(&name);
+                    let path = if path.is_absolute() {
+                        path
+                    } else {
+                        match &self.services.files_dir {
+                            Some(dir) => dir.join(&path),
+                            None => path,
+                        }
+                    };
+                    self.session.path = Some(path);
                 }
+                // A phone has no status bar, and a save that writes to a folder the user never sees
+                // must still say where it went; the phone shell shows this as a toast.
+                let shown = std::path::Path::new(&name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| name.clone());
+                let shown = crate::i18n::isolate_path(&shown);
+                let msg = i18n::fmt(tl!("Saved {name}"), &[("name", shown.as_str())]);
+                self.status(msg);
+            } else if self.services.host_save.is_some() {
+                // An export writes a file the same way; say so, or a phone (with no status bar
+                // and no browser download shelf) gives no sign that it worked.
+                let shown = std::path::Path::new(&name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| name.clone());
+                let shown = crate::i18n::isolate_path(&shown);
+                let msg = i18n::fmt(tl!("Exported {path}"), &[("path", shown.as_str())]);
+                self.status(msg);
             }
             // The browser's picker writes the file later (#1315): until it says how that went,
             // the document's save isn't confirmed.

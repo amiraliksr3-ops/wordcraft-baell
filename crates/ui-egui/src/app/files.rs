@@ -290,9 +290,17 @@ impl WordApp {
         if id == "file.save"
             && self.services.host_save.is_some()
             && !self.legacy_word_path()
-            && let Some(name) = self.session.path.as_ref().and_then(|p| p.file_name())
+            && let Some(path) = self.session.path.as_ref()
         {
-            return name.to_string_lossy().to_string();
+            // A host that writes real files (the phone's built-in browser) gets the whole path
+            // back, so Save returns to the opened file instead of writing a copy into the
+            // default folder. A web page's files are named, not pathed, so it gets the name.
+            if path.is_absolute() {
+                return path.to_string_lossy().into_owned();
+            }
+            if let Some(name) = path.file_name() {
+                return name.to_string_lossy().to_string();
+            }
         }
         self.default_save_name()
     }

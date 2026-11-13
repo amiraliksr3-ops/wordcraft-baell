@@ -82,6 +82,65 @@ pub use tabs::{
 use underline::{UNDERLINE_STYLES, underline_menu};
 use view::{outlining, view};
 
+/// The controls of the current tab, shared by the desktop ribbon and the phone's bottom sheet.
+/// A hidden tab shows nothing; a custom tab shows its own groups.
+pub(crate) fn tab_content(app: &mut WordApp, ui: &mut Ui) {
+    let user_tabs = app.session.ribbon.tabs().into_owned();
+    let entry = user_tabs.iter().find(|e| e.name == app.ui.tab);
+    match entry {
+        // Every tab hidden: nothing to show.
+        Some(e) if e.hidden => return,
+        Some(e) if e.custom => {
+            custom_groups(app, ui, &e.groups);
+            return;
+        }
+        _ => {}
+    }
+    match app.ui.tab.as_str() {
+        "Home" => home(app, ui),
+        "Insert" => insert(app, ui),
+        "Draw" => draw(app, ui),
+        "Design" => design(app, ui),
+        "Layout" => layout(app, ui),
+        "References" => references(app, ui),
+        "Mailings" => mailings(app, ui),
+        "Review" => review(app, ui),
+        "View" => view(app, ui),
+        "Developer" => developer(app, ui),
+        "Zotero" => zotero(app, ui),
+        "Help" => help(app, ui),
+        "Table Design" => table_design(app, ui),
+        "Table Layout" => table_layout(app, ui),
+        "Equation" if app.session.math.is_some() => crate::equation_tab::show(app, ui),
+        "Picture Format" => picture_format(app, ui),
+        "Shape Format" => shape_format(app, ui),
+        "SmartArt Design" => smart_art_design(app, ui),
+        "Outlining" => outlining(app, ui),
+        "Chart Design" => chart_design(app, ui),
+        _ => home(app, ui),
+    }
+    if let Some(e) = entry {
+        custom_groups(app, ui, &e.groups);
+    }
+}
+
+/// The tabs the strip offers right now (File first, then the user's tabs and the contextual
+/// ones), for the phone's bottom bar.
+pub(crate) fn visible_tabs(app: &WordApp) -> Vec<String> {
+    let user_tabs = app.session.ribbon.tabs().into_owned();
+    let mut tabs: Vec<String> = vec!["File".to_string()];
+    tabs.extend(user_tabs.iter().filter(|e| !e.hidden).map(|e| e.name.clone()));
+    for ct in contextual_tabs(&app.session) {
+        // Outlining sits right after File, as in Word and in the desktop strip.
+        if ct == "Outlining" {
+            tabs.insert(1.min(tabs.len()), ct.to_string());
+        } else if !tabs.iter().any(|n| n == ct) {
+            tabs.push(ct.to_string());
+        }
+    }
+    tabs
+}
+
 /// Draws the Read toolbar or the full ribbon, switching to and from the contextual Equation and
 /// Outlining tabs and showing the available tab strip.
 pub fn show(app: &mut WordApp, ui: &mut Ui) {
@@ -404,7 +463,6 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             }
             let bg = ui.interact(ui.max_rect(), ui.scope_id().with("ribbon_background"), Sense::click());
             crate::rtl::context_menu(&bg, |ui| crate::rtl::root(ui, |ui| crate::widgets::customize_menu_items(ui, app)));
-            let entry = user_tabs.iter().find(|e| e.name == app.ui.tab);
             crate::ribbon_fit::begin(ui.ctx(), &app.ui.tab, ui.available_width() - 4.0);
             // 0.37 keeps the scroll offset private: an edge-chevron click leaves a one-frame
             // request here and the next scroll area is built at that offset.
@@ -430,38 +488,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 let size = vec2(if rtl { row_w } else { ui.available_size_before_wrap().x }, ui.available_size_before_wrap().y);
                 let body = |ui: &mut Ui| {
                     ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
-                    match entry {
-                        // Every tab hidden: nothing to show.
-                        Some(e) if e.hidden => return,
-                        Some(e) if e.custom => return custom_groups(app, ui, &e.groups),
-                        _ => {}
-                    }
-                    match app.ui.tab.as_str() {
-                        "Home" => home(app, ui),
-                        "Insert" => insert(app, ui),
-                        "Draw" => draw(app, ui),
-                        "Design" => design(app, ui),
-                        "Layout" => layout(app, ui),
-                        "References" => references(app, ui),
-                        "Mailings" => mailings(app, ui),
-                        "Review" => review(app, ui),
-                        "View" => view(app, ui),
-                        "Developer" => developer(app, ui),
-                        "Zotero" => zotero(app, ui),
-                        "Help" => help(app, ui),
-                        "Table Design" => table_design(app, ui),
-                        "Table Layout" => table_layout(app, ui),
-                        "Equation" if app.session.math.is_some() => crate::equation_tab::show(app, ui),
-                        "Picture Format" => picture_format(app, ui),
-                        "Shape Format" => shape_format(app, ui),
-                        "SmartArt Design" => smart_art_design(app, ui),
-                        "Outlining" => outlining(app, ui),
-                        "Chart Design" => chart_design(app, ui),
-                        _ => home(app, ui),
-                    }
-                    if let Some(e) = entry {
-                        custom_groups(app, ui, &e.groups);
-                    }
+                    tab_content(app, ui);
                 };
                 if rtl {
                     measured = ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Min), body).response.rect.width();

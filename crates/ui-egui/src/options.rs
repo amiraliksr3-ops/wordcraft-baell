@@ -141,6 +141,33 @@ pub fn page(app: &mut WordApp, ui: &mut Ui) {
     ui.add_space(16.0);
     let current = if PANES.contains(&app.ui.options_pane.as_str()) { app.ui.options_pane.clone() } else { "general".to_string() };
     let rtl = crate::rtl::on();
+    // A phone has no room for a 170 px rail beside the settings: the panes become a scrolling row
+    // above them, and the settings use the full width.
+    if crate::mobile::touch(ui.ctx()) {
+        egui::ScrollArea::horizontal().scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                for id in PANES {
+                    let label = tl!(pane_label(id));
+                    if ui.selectable_label(current == id, label).clicked() {
+                        app.ui.options_pane = id.to_string();
+                    }
+                }
+            });
+        });
+        ui.separator();
+        ui.add_space(8.0);
+        crate::rtl::vertical(ui, |ui| match current.as_str() {
+            "display" => display(app, ui),
+            "proofing" => proofing(app, ui),
+            "save" => save(app, ui),
+            "language" => language(app, ui),
+            "accessibility" => accessibility(app, ui),
+            "advanced" => advanced(app, ui),
+            "agents" => agents(ui),
+            _ => general(app, ui),
+        });
+        return;
+    }
     let body = |ui: &mut Ui| {
         crate::rtl::vertical(ui, |ui| {
             ui.set_width(170.0);

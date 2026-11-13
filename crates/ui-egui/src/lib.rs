@@ -107,6 +107,7 @@ pub use file_dialogs::{FileDialogAnswer, FileDialogRequest, open_filters};
 
 mod app;
 mod clock;
+mod mobile;
 mod services;
 mod state;
 
